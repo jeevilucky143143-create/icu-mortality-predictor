@@ -1,0 +1,362 @@
+#python -m http.server 5500
+#http://localhost:5500
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ICU Mortality Predictor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0f1e;
+      --panel: #0d1428;
+      --border: #1a2540;
+      --accent: #00d4ff;
+      --accent2: #ff4b6e;
+      --accent3: #00ff9d;
+      --text: #c8d8f0;
+      --muted: #4a5f80;
+      --warn: #ffb347;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none; z-index: 0;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem; position: relative; z-index: 1; }
+
+    header {
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 2.5rem; padding-bottom: 1.2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .pulse { width: 12px; height: 12px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 0 0 rgba(0,212,255,0.6); animation: pulse 2s infinite; }
+    @keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(0,212,255,0); } }
+    header h1 { font-family: 'Space Mono', monospace; font-size: 1.2rem; color: var(--accent); }
+    header p { margin-left: auto; font-size: 0.72rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+    /* API URL bar */
+    .api-bar {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.7rem 1rem;
+      display: flex; align-items: center; gap: 0.8rem;
+      margin-bottom: 1.5rem;
+    }
+    .api-bar label { font-family: 'Space Mono', monospace; font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
+    .api-bar input {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      color: var(--accent); font-family: 'Space Mono', monospace; font-size: 0.78rem;
+      padding: 0.4rem 0.7rem; border-radius: 6px; outline: none;
+    }
+    .api-bar input:focus { border-color: var(--accent); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
+    .dot.online { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); }
+    .dot.offline { background: var(--accent2); }
+
+    .grid { display: grid; grid-template-columns: 1fr 370px; gap: 1.5rem; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.8rem; }
+    .panel-title {
+      font-family: 'Space Mono', monospace; font-size: 0.68rem;
+      letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase;
+      margin-bottom: 1.4rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .panel-title::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; display: inline-block; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .field { display: flex; flex-direction: column; gap: 0.4rem; }
+    label { font-size: 0.7rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+    .unit { font-size: 0.62rem; color: var(--accent); margin-left: 3px; }
+    input[type="number"] {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      font-family: 'Space Mono', monospace; font-size: 0.9rem;
+      padding: 0.6rem 0.8rem; border-radius: 7px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s; width: 100%;
+    }
+    input[type="number"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,212,255,0.1); }
+    input[type="number"]::placeholder { color: var(--muted); }
+
+    .slider-row { display: flex; align-items: center; gap: 0.6rem; }
+    input[type="range"] { -webkit-appearance: none; flex: 1; height: 4px; background: var(--border); border-radius: 4px; outline: none; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; background: var(--accent); border-radius: 50%; cursor: pointer; box-shadow: 0 0 5px rgba(0,212,255,0.5); }
+    .range-val { font-family: 'Space Mono', monospace; font-size: 0.78rem; color: var(--accent); min-width: 32px; text-align: right; }
+
+    .btn-predict {
+      width: 100%; margin-top: 1.4rem; padding: 0.85rem;
+      background: transparent; border: 1.5px solid var(--accent);
+      color: var(--accent); font-family: 'Space Mono', monospace;
+      font-size: 0.82rem; letter-spacing: 0.12em; border-radius: 8px;
+      cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+    }
+    .btn-predict:hover { background: rgba(0,212,255,0.08); box-shadow: 0 0 18px rgba(0,212,255,0.2); }
+    .btn-predict:active { transform: scale(0.98); }
+    .btn-predict.loading { opacity: 0.5; cursor: not-allowed; }
+
+    /* Results */
+    .risk-gauge { text-align: center; padding: 1.8rem 1rem; }
+    .risk-circle {
+      width: 130px; height: 130px; border-radius: 50%;
+      margin: 0 auto 1rem; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      border: 3px solid var(--border); transition: all 0.5s ease;
+    }
+    .risk-circle.low      { border-color: var(--accent3); box-shadow: 0 0 28px rgba(0,255,157,0.2); }
+    .risk-circle.moderate { border-color: var(--warn);    box-shadow: 0 0 28px rgba(255,179,71,0.2); }
+    .risk-circle.high     { border-color: var(--accent2); box-shadow: 0 0 28px rgba(255,75,110,0.3); }
+    .risk-pct { font-family: 'Space Mono', monospace; font-size: 1.8rem; font-weight: 700; line-height: 1; }
+    .risk-pct.low      { color: var(--accent3); }
+    .risk-pct.moderate { color: var(--warn); }
+    .risk-pct.high     { color: var(--accent2); }
+    .risk-sub { font-size: 0.62rem; color: var(--muted); margin-top: 2px; }
+    .risk-badge { display: inline-block; padding: 0.28rem 0.9rem; border-radius: 20px; font-family: 'Space Mono', monospace; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; }
+    .risk-badge.low      { background: rgba(0,255,157,0.1); color: var(--accent3); border: 1px solid var(--accent3); }
+    .risk-badge.moderate { background: rgba(255,179,71,0.1); color: var(--warn); border: 1px solid var(--warn); }
+    .risk-badge.high     { background: rgba(255,75,110,0.1); color: var(--accent2); border: 1px solid var(--accent2); }
+
+    .vital-bars { display: flex; flex-direction: column; gap: 0.75rem; }
+    .vbar-row { display: flex; flex-direction: column; gap: 0.28rem; }
+    .vbar-label { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+    .vbar-track { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .vbar-fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.6s ease; }
+
+    .recommendation { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem 1.1rem; font-size: 0.78rem; line-height: 1.7; color: var(--text); }
+    .recommendation strong { display: block; font-family: 'Space Mono', monospace; font-size: 0.62rem; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 0.35rem; text-transform: uppercase; }
+
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.7rem; padding: 3rem 1rem; color: var(--muted); text-align: center; }
+    .empty-state .icon { font-size: 2.2rem; opacity: 0.25; }
+    .empty-state p { font-size: 0.78rem; line-height: 1.6; }
+
+    .error-msg { color: var(--accent2); font-size: 0.75rem; font-family: 'Space Mono', monospace; margin-top: 0.7rem; padding: 0.55rem 0.8rem; background: rgba(255,75,110,0.07); border: 1px solid rgba(255,75,110,0.2); border-radius: 6px; display: none; }
+
+    footer { margin-top: 2.5rem; text-align: center; font-size: 0.68rem; color: var(--muted); font-family: 'Space Mono', monospace; border-top: 1px solid var(--border); padding-top: 1.2rem; }
+
+    @media (max-width: 780px) { .grid { grid-template-columns: 1fr; } .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="pulse"></div>
+    <h1>ICU Mortality Predictor</h1>
+    <p>Clinical Decision Support · SKLearn + Flask</p>
+  </header>
+
+  <!-- API URL config bar -->
+  <div class="api-bar" style="display:none;">
+    <label>BACKEND URL</label>
+    <input type="text" id="apiUrl" placeholder="https://your-app.onrender.com" />
+    <div class="dot" id="statusDot" title="Connection status"></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- Form -->
+    <div class="panel">
+      <div class="panel-title">Patient Vitals Input</div>
+      <div class="form-grid">
+
+        <div class="field">
+          <label>Age <span class="unit">yrs</span></label>
+          <input type="number" id="age" placeholder="e.g. 65" min="18" max="100" />
+        </div>
+        <div class="field">
+          <label>Heart Rate <span class="unit">bpm</span></label>
+          <input type="number" id="heart_rate" placeholder="e.g. 88" />
+        </div>
+        <div class="field">
+          <label>BP Systolic <span class="unit">mmHg</span></label>
+          <input type="number" id="bp_systolic" placeholder="e.g. 120" />
+        </div>
+        <div class="field">
+          <label>BP Diastolic <span class="unit">mmHg</span></label>
+          <input type="number" id="bp_diastolic" placeholder="e.g. 75" />
+        </div>
+        <div class="field">
+          <label>Temperature <span class="unit">°C</span></label>
+          <input type="number" id="temperature" placeholder="e.g. 37.2" step="0.1" />
+        </div>
+        <div class="field">
+          <label>Creatinine <span class="unit">mg/dL</span></label>
+          <input type="number" id="creatinine" placeholder="e.g. 1.1" step="0.1" />
+        </div>
+        <div class="field" style="grid-column: span 2;">
+          <label>WBC Count <span class="unit">×10³/μL</span></label>
+          <input type="number" id="wbc" placeholder="e.g. 9.5" step="0.1" />
+        </div>
+        <div class="field" style="grid-column: span 2;">
+          <label>SpO₂ <span class="unit">%</span></label>
+          <div class="slider-row">
+            <input type="range" id="spo2" min="60" max="100" value="95" oninput="document.getElementById('spo2_val').textContent=this.value" />
+            <span class="range-val" id="spo2_val">95</span>
+          </div>
+        </div>
+        <div class="field" style="grid-column: span 2;">
+          <label>GCS Score <span class="unit">3–15</span></label>
+          <div class="slider-row">
+            <input type="range" id="gcs_score" min="3" max="15" value="14" oninput="document.getElementById('gcs_val').textContent=this.value" />
+            <span class="range-val" id="gcs_val">14</span>
+          </div>
+        </div>
+
+      </div>
+      <button class="btn-predict" id="predictBtn" onclick="predict()">▶ &nbsp; Run Prediction</button>
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+
+    <!-- Results -->
+    <div class="panel">
+      <div class="panel-title">Prediction Output</div>
+      <div class="empty-state" id="emptyState">
+        <div class="icon">⚕</div>
+        <p>Enter patient vitals and click Run Prediction to see the mortality risk analysis.</p>
+      </div>
+      <div id="resultContent" style="display:none; flex-direction:column; gap:1.1rem;">
+        <div class="risk-gauge">
+          <div class="risk-circle" id="riskCircle">
+            <span class="risk-pct" id="riskPct">—</span>
+            <span class="risk-sub">mortality risk</span>
+          </div>
+          <div class="risk-badge" id="riskBadge">—</div>
+        </div>
+        <div class="vital-bars">
+          <div class="panel-title" style="margin-bottom:0.4rem">Vitals Summary</div>
+          <div id="vitalBarsContainer"></div>
+        </div>
+        <div class="recommendation" id="recommendation">
+          <strong>Clinical Note</strong>
+          <span id="recText"></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>⚠ Educational purposes only — not for clinical use &nbsp;|&nbsp; ICU Mortality Predictor</footer>
+</div>
+
+<script>
+  // ── Config ─────────────────────────────────────────────────────────────
+// Backend URL (Render)
+const urlInput = document.getElementById("apiUrl");
+
+// Replace this with YOUR Render URL
+const API_URL = "https://icu-mortality-predictor-oekp.onrender.com";
+
+// Automatically set the backend URL
+urlInput.value = API_URL;
+
+// Prevent editing
+urlInput.readOnly = true;
+
+  const VITALS_CFG = [
+    { id:"age",         label:"Age",        min:18,  max:100, unit:"yrs"  },
+    { id:"heart_rate",  label:"Heart Rate", min:30,  max:200, unit:"bpm"  },
+    { id:"bp_systolic", label:"BP Sys",     min:60,  max:220, unit:"mmHg" },
+    { id:"spo2",        label:"SpO₂",       min:60,  max:100, unit:"%"    },
+    { id:"gcs_score",   label:"GCS",        min:3,   max:15,  unit:""     },
+    { id:"creatinine",  label:"Creatinine", min:0,   max:15,  unit:"mg/dL"},
+  ];
+
+  const RECS = {
+    Low:      "Patient vitals indicate low immediate risk. Continue standard monitoring. Schedule routine follow-up.",
+    Moderate: "Moderate risk detected. Increase monitoring frequency. Review medications and fluid balance. Alert attending physician.",
+    High:     "HIGH RISK — Immediate clinical review required. Escalate to intensive intervention. Notify critical care team now."
+  };
+
+  // ── Health check ────────────────────────────────────────────────────────
+  async function checkHealth() {
+    const dot = document.getElementById("statusDot");
+    const url = "https://icu-mortality-predictor-oekp.onrender.com";
+    if (!url) { dot.className = "dot"; return; }
+    try {
+      const r = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
+      dot.className = r.ok ? "dot online" : "dot offline";
+    } catch { dot.className = "dot offline"; }
+  }
+  checkHealth();
+
+  // ── Predict ─────────────────────────────────────────────────────────────
+  async function predict() {
+    const btn    = document.getElementById("predictBtn");
+    const errDiv = document.getElementById("errorMsg");
+    errDiv.style.display = "none";
+
+    const API = "https://icu-mortality-predictor-oekp.onrender.com";
+    
+
+    const textFields = ["age","heart_rate","bp_systolic","bp_diastolic","temperature","creatinine","wbc"];
+    const payload = {};
+    for (const f of textFields) {
+      const v = document.getElementById(f).value;
+      if (!v) { showError(`Please fill in: ${f.replace(/_/g," ")}`); return; }
+      payload[f] = parseFloat(v);
+    }
+    payload.spo2      = parseFloat(document.getElementById("spo2").value);
+    payload.gcs_score = parseFloat(document.getElementById("gcs_score").value);
+
+    btn.classList.add("loading");
+    btn.textContent = "Analyzing...";
+    try {
+      const res  = await fetch(`${API}/predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      showResult(data, payload);
+    } catch (e) {
+      showError("Connection failed. Check the backend URL and make sure Render is running.");
+    } finally {
+      btn.classList.remove("loading");
+      btn.textContent = "▶  Run Prediction";
+    }
+  }
+
+  function showResult(data, inputs) {
+    document.getElementById("emptyState").style.display = "none";
+    const rc = document.getElementById("resultContent");
+    rc.style.display = "flex";
+
+    const lvl = data.risk_level.toLowerCase();
+    document.getElementById("riskCircle").className = `risk-circle ${lvl}`;
+    document.getElementById("riskPct").className    = `risk-pct ${lvl}`;
+    document.getElementById("riskPct").textContent  = data.mortality_probability.toFixed(1) + "%";
+    document.getElementById("riskBadge").className  = `risk-badge ${lvl}`;
+    document.getElementById("riskBadge").textContent = data.risk_level + " Risk";
+
+    const container = document.getElementById("vitalBarsContainer");
+    container.innerHTML = VITALS_CFG.map(v => {
+      const val = (v.id === "spo2" || v.id === "gcs_score")
+        ? parseFloat(document.getElementById(v.id).value)
+        : inputs[v.id];
+      const pct = Math.min(100, Math.max(0, ((val - v.min) / (v.max - v.min)) * 100));
+      return `<div class="vbar-row">
+        <div class="vbar-label"><span>${v.label}</span><span>${val} ${v.unit}</span></div>
+        <div class="vbar-track"><div class="vbar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join("");
+
+    document.getElementById("recText").textContent = RECS[data.risk_level];
+  }
+
+  function showError(msg) {
+    const e = document.getElementById("errorMsg");
+    e.textContent = msg;
+    e.style.display = "block";
+  }
+</script>
+</body>
+</html>
